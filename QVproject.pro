@@ -10,8 +10,8 @@ SUBDIRS = \
     zimg \
     qsvgrenderer \
     QuickViewer \
+    qvtest \
 
-#   qvtest
 
 
 fileloader.depends = Qt7z/Qt7z unrar

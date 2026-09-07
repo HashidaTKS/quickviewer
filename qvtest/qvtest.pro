@@ -23,6 +23,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
+CODECFORSRC = UTF-8
 
 SOURCES += \
         tst_fileloadertest.cpp 
@@ -31,13 +32,18 @@ DEFINES += SRCDIR=\\\"$$PWD/\\\"
 
 win32 {
     LIBS += -luser32 -ladvapi32 -lShlwapi -loleaut32 -lole32 -lshell32
+    win32-msvc* {
+        # the test data contains Japanese file names
+        QMAKE_CXXFLAGS += /utf-8 /wd4819
+    }
 }
 unix {
     DEFINES += _UNIX
 }
 
 
-DESTDIR = ../lib
+# beside the executables, so that the 7z.dll copied there can be loaded
+DESTDIR = ../bin
 LIBS += -L../lib -lunrar -lQt7z -lfileloader
 INCLUDEPATH += ../fileloader
 
