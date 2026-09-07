@@ -14,6 +14,13 @@ win32-msvc* {
     QMAKE_CXXFLAGS += /Zp8 /we4302 /we4189 /wd4290 /wd4335 /wd4355 /wd4814 /wd4091 /TP /Zc:sizedDealloc- 
 }
 
+*clang* || *g++* {
+    # svg-native-viewer uses std::int32_t, strcmp() and strlen() without
+    # including the headers that declare them. libstdc++ 13 and later no
+    # longer pull them in transitively, so they are forced in here.
+    QMAKE_CXXFLAGS += -include cstdint -include cstring -include cstddef
+}
+
 INCLUDEPATH += \
   $$SVGNATIVE/include \
 

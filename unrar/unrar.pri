@@ -14,7 +14,6 @@ SOURCES += \
     $$PWD/unrar/arcread.cpp \
     $$PWD/unrar/unicode.cpp \
     $$PWD/unrar/system.cpp \
-    $$PWD/unrar/isnt.cpp \
     $$PWD/unrar/crypt.cpp \
     $$PWD/unrar/crc.cpp \
     $$PWD/unrar/rawread.cpp \
@@ -46,7 +45,18 @@ SOURCES += \
     $$PWD/unrar/cmddata.cpp \
     $$PWD/unrar/ui.cpp \
     $$PWD/unrar/largepage.cpp \
-    $$PWD/unrar/motw.cpp \
+
+# Windows only sources. They are not in OBJECTS of unrar's own unix makefile:
+# isnt.cpp lost its _WIN_ALL guard in unrar 7.x, so it no longer compiles
+# outside Windows, and motw.cpp handles the NTFS Zone.Identifier stream.
+# largepage.cpp above is still guarded by _WIN_ALL inside, as upstream builds
+# it everywhere.
+win32 {
+    SOURCES += \
+        $$PWD/unrar/isnt.cpp \
+        $$PWD/unrar/motw.cpp \
+
+}
 
 contains(DEFINES, RAR_BUILD_UNRAR) {
     SOURCES += \

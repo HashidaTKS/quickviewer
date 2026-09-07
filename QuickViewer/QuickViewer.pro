@@ -81,6 +81,9 @@ win32 {
 linux {
     DEFINES += _UNIX
     GCC_MAJOR = 6
+    # volumemanager.cpp renders svg unconditionally, so the library is needed
+    # here too. On Windows it is linked above under its versioned name.
+    LIBS += -lQSVGNative
     contains(DEFINES, QV_PORTABLE) {
         QMAKE_LFLAGS += -Wl,-rpath,../lib
     } else {
@@ -91,6 +94,7 @@ macos {
     DEFINES += _UNIX
     QMAKE_LFLAGS += -Wl,-rpath,../lib -Wl,-rpath,../Frameworks
     GCC_MAJOR = 6
+    LIBS += -lQSVGNative
     # Info.plist variables
     QMAKE_INFO_PLIST = $$PWD/Info.plist
     ICON = $$PWD/icons/quickviewer.icns
