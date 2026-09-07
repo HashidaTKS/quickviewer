@@ -70,6 +70,12 @@ jobs:
         working-directory: build
         run: make -j$(sysctl -n hw.ncpu)
 
+      - name: Run tests
+        working-directory: build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: DYLD_LIBRARY_PATH="$PWD/lib" ./bin/tst_fileloadertest
+
       # `make install` is not used here: its install_libs target expects
       # lib7z.1.0.dylib, which this project does not build (Qt7z is a static
       # lib). macdeployqt is run directly on the .app instead.

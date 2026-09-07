@@ -78,6 +78,13 @@ jobs:
         working-directory: build
         run: make -j$(nproc)
 
+      - name: Run tests
+        working-directory: build
+        env:
+          QT_QPA_PLATFORM: offscreen
+          LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
+        run: ./bin/tst_fileloadertest
+
       # `make install` is not used here: the AppImage target needs linuxdeployqt,
       # appimagetool and a prebuilt bundle/7z.so that is not part of this repo.
       # The build output is packed as-is instead.
