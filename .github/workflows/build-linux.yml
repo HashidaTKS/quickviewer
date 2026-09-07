@@ -1,0 +1,99 @@
+name: Build (Linux)
+
+# Build QuickViewer for Linux (GCC / x86_64) on every push.
+# See HowToBuild.md for the manual build procedure this workflow automates.
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/FUNDING.yml'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  QT_VERSION: '6.9.1'
+  QT_ARCH: 'linux_gcc_64'
+
+jobs:
+  build:
+    name: Linux x86_64 (GCC)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # Only the submodules actually referenced by QVproject.pro's SUBDIRS are
+      # initialized; exiv2 / libexpat / quazip / zlib are not part of the build.
+      - name: Init submodules
+        run: |
+          git submodule update --init --recursive \
+            Qt7z/Qt7z/lib7zip \
+            ResizeHalf/ResizeHalf \
+            easyexif/easyexif \
+            zimg/zimg \
+            qsvgrenderer/svg-native-viewer \
+            luminor/luminor \
+            QuickViewer/src/qactionmanager \
+            QuickViewer/src/qfullscreenframe \
+            QuickViewer/src/qlanguageselector \
+            QuickViewer/src/qnamedpipe
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libxcb1-dev \
+            libx11-xcb-dev \
+            libfontconfig1-dev \
+            libfreetype-dev
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: ${{ env.QT_ARCH }}
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Run qmake
+        run: |
+          mkdir build
+          cd build
+          qmake -o Makefile -recursive CONFIG+=release ../QVproject.pro
+
+      - name: Build
+        working-directory: build
+        run: make -j$(nproc)
+
+      # `make install` is not used here: the AppImage target needs linuxdeployqt,
+      # appimagetool and a prebuilt bundle/7z.so that is not part of this repo.
+      # The build output is packed as-is instead.
+      - name: Package
+        run: |
+          dist=dist
+          mkdir -p "$dist/bin" "$dist/lib" "$dist/translations" "$dist/database"
+          cp build/bin/QuickViewer "$dist/bin"
+          cp -a build/lib/*.so* "$dist/lib"
+          cp QuickViewer/translations/*.qm QuickViewer/translations/languages.ini "$dist/translations"
+          cp QuickViewer/database/schema.sql QuickViewer/database/thumbnail.sqlite3.db "$dist/database"
+          cp README.md LICENSE QuickViewer/QuickViewer.desktop "$dist"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuickViewer-linux-x86_64
+          path: dist/
+          if-no-files-found: error
