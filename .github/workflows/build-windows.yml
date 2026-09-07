@@ -1,0 +1,110 @@
+name: Build (Windows)
+
+# Build QuickViewer for Windows (MSVC 2022 / x64) on every push.
+# See HowToBuild.md for the manual build procedure this workflow automates.
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/FUNDING.yml'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  QT_VERSION: '6.9.1'
+  QT_ARCH: 'win64_msvc2022_64'
+
+jobs:
+  build:
+    name: Windows x64 (MSVC 2022)
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # Only the submodules actually referenced by QVproject.pro's SUBDIRS are
+      # initialized; exiv2 / libexpat / quazip / zlib are not part of the build.
+      - name: Init submodules
+        shell: pwsh
+        run: |
+          git submodule update --init --recursive `
+            Qt7z/Qt7z/lib7zip `
+            ResizeHalf/ResizeHalf `
+            easyexif/easyexif `
+            zimg/zimg `
+            qsvgrenderer/svg-native-viewer `
+            luminor/luminor `
+            QuickViewer/src/qactionmanager `
+            QuickViewer/src/qfullscreenframe `
+            QuickViewer/src/qlanguageselector `
+            QuickViewer/src/qnamedpipe
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: ${{ env.QT_ARCH }}
+          modules: 'qtimageformats'
+          cache: true
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install jom
+        run: choco install jom -y --no-progress
+
+      - name: Run qmake
+        shell: cmd
+        run: |
+          mkdir build
+          cd build
+          qmake -o Makefile -recursive CONFIG+=release ../QVproject.pro
+
+      - name: Build
+        shell: cmd
+        working-directory: build
+        run: jom
+
+      # `nmake install` is not used here: it additionally requires NSIS, qbs
+      # (bundled with Qt Creator) and a hard-coded VC redist path. The dist tree
+      # below is assembled directly instead.
+      - name: Deploy
+        shell: pwsh
+        run: |
+          $dist = "dist"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item build\bin\QuickViewer.exe                    $dist
+          Copy-Item build\bin\AssociateFilesWithQuickViewer.exe  $dist
+          Copy-Item build\bin\7z.dll                             $dist
+          Copy-Item build\lib\QSVGNative0.dll                    $dist
+          Copy-Item README.md, LICENSE                           $dist
+
+          windeployqt --release --compiler-runtime "$dist\QuickViewer.exe"
+
+          New-Item -ItemType Directory -Force -Path "$dist\translations" | Out-Null
+          Copy-Item QuickViewer\translations\*.qm                 "$dist\translations"
+          Copy-Item QuickViewer\translations\languages.ini        "$dist\translations"
+
+          New-Item -ItemType Directory -Force -Path "$dist\database" | Out-Null
+          Copy-Item QuickViewer\database\schema.sql               "$dist\database"
+          Copy-Item QuickViewer\database\thumbnail.sqlite3.db     "$dist\database"
+
+          New-Item -ItemType Directory -Force -Path "$dist\iconengines" | Out-Null
+          Copy-Item AssociateFilesWithQuickViewer\icons\*.ico     "$dist\iconengines"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuickViewer-windows-x64
+          path: dist/
+          if-no-files-found: error
