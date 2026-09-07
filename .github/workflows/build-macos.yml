@@ -1,0 +1,96 @@
+name: Build (macOS)
+
+# Build QuickViewer for macOS (clang / x86_64) on every push.
+# See HowToBuild.md for the manual build procedure this workflow automates.
+#
+# An Intel runner is required: luminor ships prebuilt x86_64 objects only
+# (luminor/luminor-macos-x64/*.o), so QV_WITH_LUMINOR cannot link on arm64.
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/FUNDING.yml'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  QT_VERSION: '6.9.1'
+  QT_ARCH: 'clang_64'
+
+jobs:
+  build:
+    name: macOS x86_64 (clang)
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # Only the submodules actually referenced by QVproject.pro's SUBDIRS are
+      # initialized; exiv2 / libexpat / quazip / zlib are not part of the build.
+      - name: Init submodules
+        run: |
+          git submodule update --init --recursive \
+            Qt7z/Qt7z/lib7zip \
+            ResizeHalf/ResizeHalf \
+            easyexif/easyexif \
+            zimg/zimg \
+            qsvgrenderer/svg-native-viewer \
+            luminor/luminor \
+            QuickViewer/src/qactionmanager \
+            QuickViewer/src/qfullscreenframe \
+            QuickViewer/src/qlanguageselector \
+            QuickViewer/src/qnamedpipe
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: ${{ env.QT_ARCH }}
+          modules: 'qtimageformats'
+          cache: true
+
+      # `-after QMAKE_MAC_SDK=macosx` overrides unrar.pro, which pins the long
+      # gone macosx10.9 SDK and would otherwise make qmake fail on the runner.
+      - name: Run qmake
+        run: |
+          mkdir build
+          cd build
+          qmake -o Makefile -recursive CONFIG+=release ../QVproject.pro \
+            -after QMAKE_MAC_SDK=macosx
+
+      - name: Build
+        working-directory: build
+        run: make -j$(sysctl -n hw.ncpu)
+
+      # `make install` is not used here: its install_libs target expects
+      # lib7z.1.0.dylib, which this project does not build (Qt7z is a static
+      # lib). macdeployqt is run directly on the .app instead.
+      - name: Deploy
+        run: |
+          macdeployqt build/bin/QuickViewer.app -libpath=build/lib -verbose=1
+
+          app=build/bin/QuickViewer.app
+          mkdir -p "$app/Contents/Resources/translations" "$app/Contents/Resources/database"
+          cp QuickViewer/translations/*.qm QuickViewer/translations/languages.ini \
+            "$app/Contents/Resources/translations"
+          cp QuickViewer/database/schema.sql QuickViewer/database/thumbnail.sqlite3.db \
+            "$app/Contents/Resources/database"
+
+          mkdir dist
+          cp README.md LICENSE dist
+          ditto -c -k --sequesterRsrc --keepParent "$app" dist/QuickViewer.app.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuickViewer-macos-x86_64
+          path: dist/
+          if-no-files-found: error
