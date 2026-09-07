@@ -75,6 +75,13 @@ jobs:
         working-directory: build
         run: jom
 
+      - name: Run tests
+        shell: cmd
+        working-directory: build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: bin\tst_fileloadertest.exe
+
       # `nmake install` is not used here: it additionally requires NSIS, qbs
       # (bundled with Qt Creator) and a hard-coded VC redist path. The dist tree
       # below is assembled directly instead.
