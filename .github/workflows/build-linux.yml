@@ -78,6 +78,20 @@ jobs:
         working-directory: build
         run: make -j$(nproc)
 
+      # lib7zip loads "7z.so" at runtime and, when it is not beside the
+      # executable, falls back to system directories such as /usr/lib/7zip.
+      # The runner has the distro 7-Zip there, which is not ABI compatible with
+      # the vendored p7zip 17.04 headers lib7zip is built against, and loading
+      # it crashes on the first archive access. Build the matching 7z.so from
+      # Qt7z/lib7z and place it beside the executables, which is searched first.
+      - name: Build 7z.so
+        run: |
+          mkdir -p build/Qt7z/lib7z
+          cd build/Qt7z/lib7z
+          qmake CONFIG+=release ../../../Qt7z/lib7z/lib7z.pro
+          make -j$(nproc)
+          cp -L ../../lib/lib7z.so ../../bin/7z.so
+
       - name: Run tests
         working-directory: build
         env:
@@ -85,14 +99,13 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
         run: ./bin/tst_fileloadertest
 
-      # `make install` is not used here: the AppImage target needs linuxdeployqt,
-      # appimagetool and a prebuilt bundle/7z.so that is not part of this repo.
-      # The build output is packed as-is instead.
+      # `make install` is not used here: the AppImage target needs linuxdeployqt
+      # and appimagetool. The build output is packed as-is instead.
       - name: Package
         run: |
           dist=dist
           mkdir -p "$dist/bin" "$dist/lib" "$dist/translations" "$dist/database"
-          cp build/bin/QuickViewer "$dist/bin"
+          cp build/bin/QuickViewer build/bin/7z.so "$dist/bin"
           cp -a build/lib/*.so* "$dist/lib"
           cp QuickViewer/translations/*.qm QuickViewer/translations/languages.ini "$dist/translations"
           cp QuickViewer/database/schema.sql QuickViewer/database/thumbnail.sqlite3.db "$dist/database"
