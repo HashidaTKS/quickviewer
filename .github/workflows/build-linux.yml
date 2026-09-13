@@ -49,6 +49,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential \
+            gdb \
             libgl1-mesa-dev \
             libglu1-mesa-dev \
             libxkbcommon-dev \
@@ -72,7 +73,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          qmake -o Makefile -recursive CONFIG+=release ../QVproject.pro
+          qmake -o Makefile -recursive CONFIG+=release CONFIG+=force_debug_info ../QVproject.pro
 
       - name: Build
         working-directory: build
@@ -97,7 +98,12 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
-        run: ./bin/tst_fileloadertest
+        run: |
+          # Diagnostics for the crash in FileLoaderTest: print the backtrace and
+          # which 7z.so was actually loaded. The plain run below sets the result.
+          gdb -batch -ex 'set debuginfod enabled off' -ex run -ex bt \
+            -ex 'info sharedlibrary' --args ./bin/tst_fileloadertest || true
+          ./bin/tst_fileloadertest
 
       # `make install` is not used here: the AppImage target needs linuxdeployqt
       # and appimagetool. The build output is packed as-is instead.
