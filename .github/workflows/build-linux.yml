@@ -80,18 +80,21 @@ jobs:
         run: make -j$(nproc)
 
       # lib7zip loads "7z.so" at runtime and, when it is not beside the
-      # executable, falls back to system directories such as /usr/lib/7zip.
-      # The runner has the distro 7-Zip there, which is not ABI compatible with
-      # the vendored p7zip 17.04 headers lib7zip is built against, and loading
-      # it crashes on the first archive access. Build the matching 7z.so from
-      # Qt7z/lib7z and place it beside the executables, which is searched first.
+      # executable or cannot be loaded, silently falls back to system
+      # directories such as /usr/lib/7zip. The runner has the distro 7-Zip
+      # there, which is not ABI compatible with the vendored p7zip 17.04 that
+      # lib7zip is built against, and it crashes on the first archive access.
+      #
+      # Build 7z.so with p7zip's own makefile, as the AppImage release did.
+      # Qt7z/lib7z/lib7z.pro is not used: it predates the p7zip fork now in
+      # the tree and misses XzDecoder/XzEncoder/LzfseDecoder, so its 7z.so has
+      # undefined symbols and fails to load.
       - name: Build 7z.so
         run: |
-          mkdir -p build/Qt7z/lib7z
-          cd build/Qt7z/lib7z
-          qmake CONFIG+=release ../../../Qt7z/lib7z/lib7z.pro
-          make -j$(nproc)
-          cp -L ../../lib/lib7z.so ../../bin/7z.so
+          make -C Qt7z/Qt7z/p7zip -j$(nproc) common7z
+          cp Qt7z/Qt7z/p7zip/bin/7z.so build/bin/7z.so
+          # Fail here rather than let lib7zip fall back to the system 7z.so.
+          python3 -c 'import ctypes; ctypes.CDLL("build/bin/7z.so"); print("7z.so loads")'
 
       - name: Run tests
         working-directory: build
