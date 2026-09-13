@@ -22,6 +22,13 @@ TARGET = QuickViewer
 TEMPLATE = app
 CONFIG += plugin
 
+# On Windows this project also compiles ../AssociateFilesWithQuickViewer/fileassocdialog.cpp,
+# and that directory has its own main.cpp. With nmake inference rules (the default batch mode)
+# release\main.obj may then be built from the wrong main.cpp, depending on the order qmake emits
+# the rules in, which is not stable. The result is a QuickViewer.exe that only shows the file
+# association dialog. Disable inference rules so each object gets an explicit rule.
+win32: CONFIG += no_batch
+
 QMAKE_TARGET_COMPANY = KATO Kanryu(k.kanryu@gmail.com)
 QMAKE_TARGET_PRODUCT = QuickViewer
 QMAKE_TARGET_DESCRIPTION = QuickViewer for folders/archives

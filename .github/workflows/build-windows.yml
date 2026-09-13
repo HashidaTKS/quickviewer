@@ -75,6 +75,14 @@ jobs:
         working-directory: build
         run: jom
 
+      # QuickViewer.pro also compiles sources from AssociateFilesWithQuickViewer, which has
+      # its own main.cpp. If the wrong one gets linked, QuickViewer.exe starts as the file
+      # association dialog. The real main creates a named pipe, so check for that import.
+      - name: Verify QuickViewer.exe entry point
+        shell: cmd
+        working-directory: build
+        run: dumpbin /nologo /imports bin\QuickViewer.exe | findstr /C:"CreateNamedPipeW"
+
       - name: Run tests
         shell: cmd
         working-directory: build
