@@ -57,7 +57,18 @@ jobs:
             libxcb1-dev \
             libx11-xcb-dev \
             libfontconfig1-dev \
-            libfreetype-dev
+            libfreetype-dev \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xfixes0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -108,21 +119,62 @@ jobs:
             -ex 'info sharedlibrary' --args ./bin/tst_fileloadertest || true
           ./bin/tst_fileloadertest
 
-      # `make install` is not used here: the AppImage target needs linuxdeployqt
-      # and appimagetool. The build output is packed as-is instead.
-      - name: Package
+      # Build an AppImage, as the official releases did up to v1.2.2. The author
+      # used linuxdeployqt through `make install`, but it is unmaintained and
+      # refuses to run on current glibc, so linuxdeploy and its Qt plugin are
+      # used instead. The layout follows qt-linux-appimage.conf, which release
+      # builds embed as qt.conf: Qt plugins in usr/plugins and translations in
+      # <AppDir>/translations. Settings and the catalog database are created in
+      # ~/.quickviewer at runtime, so they are not bundled.
+      - name: Build AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
-          dist=dist
-          mkdir -p "$dist/bin" "$dist/lib" "$dist/translations" "$dist/database"
-          cp build/bin/QuickViewer build/bin/7z.so "$dist/bin"
-          cp -a build/lib/*.so* "$dist/lib"
-          cp QuickViewer/translations/*.qm QuickViewer/translations/languages.ini "$dist/translations"
-          cp QuickViewer/database/schema.sql QuickViewer/database/thumbnail.sqlite3.db "$dist/database"
-          cp README.md LICENSE QuickViewer/QuickViewer.desktop "$dist"
+          version=$(sed -n 's/^VERSION *= *//p' QuickViewer/QuickViewer.pro | head -1 | tr -d '\r')
+          appdir=QuickViewer.AppDir
+          mkdir -p "$appdir/usr/bin" "$appdir/translations"
+          # 7z.so must sit beside the real executable, which lib7zip finds
+          # through /proc/self/exe, so that it wins over the system 7-Zip.
+          cp build/bin/QuickViewer build/bin/7z.so "$appdir/usr/bin"
+          cp QuickViewer/translations/*.qm QuickViewer/translations/languages.ini "$appdir/translations"
+          sed 's|^Exec=.*|Exec=QuickViewer %F|' QuickViewer/QuickViewer.desktop > quickviewer.desktop
+          cp docs/quickviewer.png quickviewer.png
+
+          # The same drivers the author excluded from linuxdeployqt: their
+          # client libraries are not available, so deploying them fails.
+          rm -f "$QT_ROOT_DIR"/plugins/sqldrivers/libqsql{mimer,mysql,odbc,psql}.so
+
+          base=https://github.com/linuxdeploy
+          curl -fsSLO $base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSLO $base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-*.AppImage
+
+          export PATH="$PWD:$PATH"
+          export LD_LIBRARY_PATH="$PWD/build/lib:$QT_ROOT_DIR/lib"
+          export QMAKE="$(command -v qmake)"
+          export OUTPUT="QuickViewer-${version}-x64.AppImage"
+          linuxdeploy-x86_64.AppImage --appdir "$appdir" \
+            --executable "$appdir/usr/bin/QuickViewer" \
+            --desktop-file quickviewer.desktop \
+            --icon-file quickviewer.png \
+            --plugin qt \
+            --output appimage
+
+      - name: Verify AppImage
+        run: |
+          image=$(ls QuickViewer-*-x64.AppImage)
+          ./"$image" --appimage-extract > /dev/null
+          test -f squashfs-root/usr/bin/7z.so
+          test -f squashfs-root/usr/plugins/platforms/libqxcb.so
+          test -f squashfs-root/translations/languages.ini
+          if ldd squashfs-root/usr/bin/QuickViewer | grep "not found"; then
+            echo "unresolved libraries in the AppImage"
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: QuickViewer-linux-x86_64
-          path: dist/
+          name: QuickViewer-linux-x64-AppImage
+          path: QuickViewer-*-x64.AppImage
           if-no-files-found: error
