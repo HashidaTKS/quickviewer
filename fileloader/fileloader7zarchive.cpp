@@ -198,6 +198,8 @@ public:
 
     virtual int Write(const void *data, unsigned int size, unsigned int *processedSize)
     {
+        if (!m_outStream)
+            return 1;
         auto writeBytes = m_outStream->write((char*)data, size);
         wprintf(L"Write:%d %d\n", size, writeBytes);
 
@@ -215,6 +217,8 @@ public:
 
     virtual int Seek(__int64 offset, unsigned int seekOrigin, unsigned __int64 *newPosition)
     {
+        if (!m_outStream)
+            return 1;
         bool result = false;
         switch(seekOrigin) {
         case SEEK_SET:
@@ -310,7 +314,11 @@ public:
         if(!info.isDir) {
             const QString abso = QDir(m_baseDirPath).filePath(QString::number(index));
             m_outStream = new QFile(abso);
-            m_outStream->open(QIODevice::WriteOnly);
+            if(!m_outStream->open(QIODevice::WriteOnly)) {
+                delete m_outStream;
+                m_outStream = nullptr;
+                return 1;
+            }
         }
         return 0;
     }

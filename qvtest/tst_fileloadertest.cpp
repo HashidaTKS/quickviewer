@@ -35,6 +35,7 @@ private Q_SLOTS:
     void deflate64_utf8();
     void deflate_mbcs();
     void deflate64_mbcs();
+    void solid7z_extractedToTemporaryDir();
 
 private:
     /**
@@ -128,6 +129,30 @@ void FileLoaderTest::deflate64_mbcs()
     if(entry.isNull())
         return;
     QVERIFY(entry.endsWith("test.bmp"));
+}
+
+// A solid archive is expanded at once with C7ZipArchive::ExtractAll() into a
+// temporary directory, one file per item. lib7zip has to report the index of
+// each item through C7ZipOutStream::ReopenForIndex(); without it the first
+// write went to a null QIODevice and the viewer crashed on any solid 7z.
+void FileLoaderTest::solid7z_extractedToTemporaryDir()
+{
+    if(!FileLoader7zArchive::isInitialized())
+        QSKIP("7z.dll(7z.so) is not available beside the test binary");
+
+    // solid.7z holds two PNG files, made with libarchive whose 7z writer is solid
+    FileLoader7zArchive seven(nullptr, QString::fromUtf8(DATAPATH "solid.7z"), "7z", true);
+    QStringList files = seven.contents();
+    QCOMPARE(files, QStringList({"page1.png", "page2.png"}));
+
+    // each item must land in its own file with its own content
+    QMutex mutex;
+    QByteArray page1 = seven.getFile("page1.png", mutex);
+    QByteArray page2 = seven.getFile("page2.png", mutex);
+    QCOMPARE(page1.size(), 16484);
+    QCOMPARE(page2.size(), 19994);
+    QCOMPARE(QImage::fromData(page1, "png").width(), 400);
+    QCOMPARE(QImage::fromData(page2, "png").width(), 400);
 }
 
 
