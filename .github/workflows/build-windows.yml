@@ -104,7 +104,21 @@ jobs:
           Copy-Item build\lib\QSVGNative0.dll                    $dist
           Copy-Item README.md, LICENSE                           $dist
 
-          windeployqt --release --compiler-runtime "$dist\QuickViewer.exe"
+          windeployqt --release "$dist\QuickViewer.exe"
+
+          # The VC runtime is shipped as plain DLLs, the way the official packages do.
+          # --compiler-runtime would drop vc_redist.x64.exe here instead, and an
+          # installer inside the archive makes browsers flag the download.
+          $crt = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse `
+            -Filter msvcp140.dll -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match 'Redist\\MSVC\\.*\\x64\\Microsoft\.VC\d+\.CRT$' } |
+            Sort-Object FullName | Select-Object -Last 1
+          if (-not $crt) { throw "VC runtime redistributable DLLs not found" }
+          Copy-Item (Join-Path $crt.DirectoryName "concrt140.dll")    $dist
+          Copy-Item (Join-Path $crt.DirectoryName "msvcp140.dll")     $dist
+          Copy-Item (Join-Path $crt.DirectoryName "vccorlib140.dll")  $dist
+          Copy-Item (Join-Path $crt.DirectoryName "vcruntime140.dll") $dist
+          Copy-Item (Join-Path $crt.DirectoryName "vcruntime140_1.dll") $dist
 
           New-Item -ItemType Directory -Force -Path "$dist\translations" | Out-Null
           Copy-Item QuickViewer\translations\*.qm                 "$dist\translations"
