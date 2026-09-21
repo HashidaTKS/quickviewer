@@ -1,3 +1,5 @@
 .gitattributes
 Qt7z/* linguist-vendored
 doc/* linguist-vendored
+# Shell scripts run inside Linux containers and CI; a CRLF checkout breaks the shebang.
+*.sh text eol=lf
