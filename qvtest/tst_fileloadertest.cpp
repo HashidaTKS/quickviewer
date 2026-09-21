@@ -173,6 +173,7 @@ private Q_SLOTS:
     void archiveFileIsDetectedByExtension();
     void exifAndAnimatedFormats();
     void filesAreSortedForPageOrder();
+    void caseInsensitiveLessThanIgnoresCase();
 };
 
 void PathRulesTest::initTestCase()
@@ -243,6 +244,25 @@ void PathRulesTest::filesAreSortedForPageOrder()
     QStringList expected = {"page1.jpg", "page10.jpg", "Page2.jpg", "page9.jpg"};
 #endif
     QCOMPARE(files, expected);
+}
+
+// IFileLoader::caseInsensitiveLessThan() is the comparator sortFiles() uses
+// internally. filesAreSortedForPageOrder() already exercises it indirectly
+// through std::sort; this covers it directly so a regression in the
+// comparator itself (not just the overall ordering) is caught.
+void PathRulesTest::caseInsensitiveLessThanIgnoresCase()
+{
+#ifdef Q_OS_WIN
+    QSKIP("caseInsensitiveLessThan() delegates to StrCmpLogicalW() on Windows; "
+          "already covered by filesAreSortedForPageOrder()");
+#else
+    QVERIFY(IFileLoader::caseInsensitiveLessThan("apple.jpg", "Banana.jpg"));
+    QVERIFY(!IFileLoader::caseInsensitiveLessThan("Banana.jpg", "apple.jpg"));
+    QVERIFY(!IFileLoader::caseInsensitiveLessThan("SAME.jpg", "same.jpg"));
+    // plain lowercase compare, not natural-numeric: "10" sorts before "9"
+    QVERIFY(!IFileLoader::caseInsensitiveLessThan("page9.jpg", "page10.jpg"));
+    QVERIFY(IFileLoader::caseInsensitiveLessThan("page10.jpg", "page9.jpg"));
+#endif
 }
 
 
